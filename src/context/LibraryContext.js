@@ -1,5 +1,6 @@
 import { createContext, useEffect, useState } from "react";
 import { db } from "../services/firebase";
+import { auth } from "../services/firebase";
 
 import {
   collection,
@@ -17,6 +18,10 @@ export const LibraryProvider = ({ children }) => {
   const [users, setUsers] = useState([]);
   const [cart, setCart] = useState([]);
 
+  const [userBooks, setUserBooks] = useState([]);
+
+
+  // GLOBAL BOOKS (catalog)
   const fetchBooks = async () => {
     try {
       const snapshot = await getDocs(collection(db, "books"));
@@ -32,6 +37,7 @@ export const LibraryProvider = ({ children }) => {
     }
   };
 
+  //  USERS
   const fetchUsers = async () => {
     try {
       const snapshot = await getDocs(collection(db, "users"));
@@ -47,45 +53,62 @@ export const LibraryProvider = ({ children }) => {
     }
   };
 
+ 
+  //  USER LIBRARY (ONLY HIS BOOKS)
+  const fetchUserBooks = async (uid) => {
+    try {
+      const snapshot = await getDocs(
+        collection(db, "users", uid, "books")
+      );
+
+      const data = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      setUserBooks(data);
+    } catch (err) {
+      console.error("Error loading user books:", err);
+    }
+  };
+
+  
+  // INIT LOAD
   useEffect(() => {
     fetchBooks();
     fetchUsers();
   }, []);
 
-
-  // CREATE
+  
+  // BOOK CRUD (CATALOG)
   const addBook = async (book) => {
-    try {
-      await addDoc(collection(db, "books"), book);
-      fetchBooks();
-    } catch (err) {
-      console.error("Error adding book:", err);
-    }
+    await addDoc(collection(db, "books"), book);
+    fetchBooks();
   };
 
-  // DELETE
   const deleteBook = async (id) => {
-    try {
-      await deleteDoc(doc(db, "books", id));
-      fetchBooks();
-    } catch (err) {
-      console.error("Error deleting book:", err);
-    }
+    await deleteDoc(doc(db, "books", id));
+    fetchBooks();
   };
 
-  // UPDATE
   const updateBook = async (id, updatedData) => {
-    try {
-      await updateDoc(doc(db, "books", id), updatedData);
-      fetchBooks();
-    } catch (err) {
-      console.error("Error updating book:", err);
-    }
+    await updateDoc(doc(db, "books", id), updatedData);
+    fetchBooks();
   };
 
-  // =========================
-  // 🛒 CART LOGIC
-  // =========================
+  
+  // ADD BOOK TO USER LIBRARY
+  const addBookToUser = async (uid, book) => {
+    await addDoc(collection(db, "users", uid, "books"), book);
+    fetchUserBooks(uid);
+  };
+
+  const removeBookFromUser = async (uid, bookId) => {
+    await deleteDoc(doc(db, "users", uid, "books", bookId));
+    fetchUserBooks(uid);
+  };
+
+  // CART LOGIC
   const addToCart = (book) => {
     setCart((prev) => {
       const existing = prev.find((item) => item.id === book.id);
@@ -105,9 +128,7 @@ export const LibraryProvider = ({ children }) => {
   const increaseQty = (id) => {
     setCart((prev) =>
       prev.map((item) =>
-        item.id === id
-          ? { ...item, qty: item.qty + 1 }
-          : item
+        item.id === id ? { ...item, qty: item.qty + 1 } : item
       )
     );
   };
@@ -130,6 +151,7 @@ export const LibraryProvider = ({ children }) => {
 
   const clearCart = () => setCart([]);
 
+  // PROVIDER
   return (
     <LibraryContext.Provider
       value={{
@@ -137,13 +159,21 @@ export const LibraryProvider = ({ children }) => {
         books,
         users,
         cart,
+        userBooks,
 
-        // firebase actions
+        // fetch
         fetchBooks,
         fetchUsers,
+        fetchUserBooks,
+
+        // catalog CRUD
         addBook,
         deleteBook,
         updateBook,
+
+        // user library
+        addBookToUser,
+        removeBookFromUser,
 
         // cart
         addToCart,
