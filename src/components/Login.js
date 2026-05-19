@@ -16,7 +16,7 @@ export default function Login() {
 
     try {
       await login(form.email, form.password);
-      navigate("/profile");
+      navigate("/");
     } catch (err) {
       alert("Невірний email або пароль");
     }
